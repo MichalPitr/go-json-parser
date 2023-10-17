@@ -105,6 +105,11 @@ func parseJson(m *Map) {
 
 		(*m)[key.lexeme] = val
 
+		if peek(0).token == COMMA_TOKEN && peek(1).token == RIGHT_PAREN_TOKEN {
+			os.Stderr.WriteString("Trailing comma.\n")
+			os.Exit(1)
+		}
+
 		if peek(0).token != RIGHT_PAREN_TOKEN {
 			consume(COMMA_TOKEN, "Expected ',' to separate key-value pairs.")
 		}
