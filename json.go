@@ -14,6 +14,7 @@ const (
 	COMMA_TOKEN           = 4
 	NUMBER_TOKEN          = 5
 	BOOL_TOKEN            = 6
+	NULL_TOKEN            = 7
 )
 
 type Token struct {
@@ -93,6 +94,9 @@ func tokenize(source *string) {
 			} else if ch == 'f' && (*source)[end:end+5] == "false" {
 				parser.tokens = append(parser.tokens, Token{"false", BOOL_TOKEN})
 				end += 4
+			} else if ch == 'n' && (*source)[end:end+4] == "null" {
+				parser.tokens = append(parser.tokens, Token{"null", NULL_TOKEN})
+				end += 3
 			} else {
 				os.Stderr.WriteString("Found unexpected symbol.\n")
 				os.Exit(1)
@@ -120,7 +124,7 @@ func parseNumber(token Token) (interface{}, error) {
 	return nil, fmt.Errorf("'%s' is not an integer or float.\n", token.lexeme)
 }
 
-// can be string, bool, int, float,
+// can be string, bool, int, float, null
 func parseValue() interface{} {
 	switch token := peek(0); token.token {
 	case STRING_TOKEN:
@@ -147,6 +151,9 @@ func parseValue() interface{} {
 		}
 		position++
 		return boolean
+	case NULL_TOKEN:
+		position++
+		return nil
 	}
 	fmt.Fprintf(os.Stderr, "Unexpected token in parseValue: %d\n", peek(0).token)
 	os.Exit(1)
