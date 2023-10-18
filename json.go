@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 )
 
 const (
@@ -11,6 +12,7 @@ const (
 	COLON_TOKEN           = 2
 	STRING_TOKEN          = 3
 	COMMA_TOKEN           = 4
+	NUMBER_TOKEN          = 5
 )
 
 type Token struct {
@@ -31,6 +33,13 @@ type Parser struct {
 var position int
 var parser = Parser{
 	tokens: []Token{},
+}
+
+func isDigit(ch byte) bool {
+	if '0' <= ch && ch <= '9' {
+		return true
+	}
+	return false
 }
 
 // Hashmap that can hold any value with string keys.
@@ -62,8 +71,25 @@ func tokenize(source *string) {
 		case '\n':
 		case '\t':
 		default:
-			os.Stderr.WriteString("Found unexpected symbol.\n")
-			os.Exit(1)
+			if isDigit(ch) {
+				for isDigit((*source)[end]) {
+					end++
+				}
+				// Handle floating numbers
+				if (*source)[end] == '.' && end+1 < len(*source) && isDigit((*source)[end+1]) {
+					end++ // step over '.'
+					for isDigit((*source)[end]) {
+						end++
+					}
+				}
+				number := (*source)[start:end]
+				// Decrement end so that we don't skip over the following character. Kinda ugly.
+				end--
+				parser.tokens = append(parser.tokens, Token{number, NUMBER_TOKEN})
+			} else {
+				os.Stderr.WriteString("Found unexpected symbol.\n")
+				os.Exit(1)
+			}
 		}
 		start = end + 1
 		end++
@@ -74,12 +100,33 @@ func tokenize(source *string) {
 	}
 }
 
+func parseNumber(token Token) (interface{}, error) {
+	if i, err := strconv.Atoi(token.lexeme); err == nil {
+		return i, nil
+	}
+
+	// Try to parse as a float64
+	if f, err := strconv.ParseFloat(token.lexeme, 64); err == nil {
+		return f, nil
+	}
+
+	return nil, fmt.Errorf("'%s' is not an integer or float.\n", token.lexeme)
+}
+
 // can be string, bool, int, float,
 func parseValue() interface{} {
 	switch token := peek(0); token.token {
 	case STRING_TOKEN:
 		position++
 		return token.lexeme
+	case NUMBER_TOKEN:
+		position++
+		num, err := parseNumber(token)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, err.Error())
+			os.Exit(1)
+		}
+		return num
 	}
 	fmt.Fprintf(os.Stderr, "Unexpected token in parseValue: %d\n", peek(0).token)
 	os.Exit(1)
