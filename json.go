@@ -13,6 +13,7 @@ const (
 	STRING_TOKEN          = 3
 	COMMA_TOKEN           = 4
 	NUMBER_TOKEN          = 5
+	BOOL_TOKEN            = 6
 )
 
 type Token struct {
@@ -86,6 +87,12 @@ func tokenize(source *string) {
 				// Decrement end so that we don't skip over the following character. Kinda ugly.
 				end--
 				parser.tokens = append(parser.tokens, Token{number, NUMBER_TOKEN})
+			} else if ch == 't' && (*source)[end:end+4] == "true" {
+				parser.tokens = append(parser.tokens, Token{"true", BOOL_TOKEN})
+				end += 3
+			} else if ch == 'f' && (*source)[end:end+5] == "false" {
+				parser.tokens = append(parser.tokens, Token{"false", BOOL_TOKEN})
+				end += 4
 			} else {
 				os.Stderr.WriteString("Found unexpected symbol.\n")
 				os.Exit(1)
@@ -120,13 +127,26 @@ func parseValue() interface{} {
 		position++
 		return token.lexeme
 	case NUMBER_TOKEN:
-		position++
 		num, err := parseNumber(token)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, err.Error())
 			os.Exit(1)
 		}
+		position++
 		return num
+	case BOOL_TOKEN:
+		var boolean bool
+		switch token.lexeme {
+		case "true":
+			boolean = true
+		case "false":
+			boolean = false
+		default:
+			fmt.Fprintf(os.Stderr, "Unexpected boolean value '%s'\n", peek(0).lexeme)
+			os.Exit(1)
+		}
+		position++
+		return boolean
 	}
 	fmt.Fprintf(os.Stderr, "Unexpected token in parseValue: %d\n", peek(0).token)
 	os.Exit(1)
