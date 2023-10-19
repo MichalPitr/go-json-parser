@@ -191,6 +191,10 @@ func parseValue() interface{} {
 			os.Exit(1)
 		}
 		return arr
+	case LEFT_PAREN_TOKEN:
+		nested_m := Map{}
+		parseJson(&nested_m)
+		return nested_m
 	}
 	fmt.Fprintf(os.Stderr, "Unexpected token in parseValue: %d\n", peek(0).token)
 	os.Exit(1)
@@ -210,16 +214,16 @@ func parseJson(m *Map) {
 
 		if str, ok := val.(string); ok {
 			(*m)[key.lexeme] = str
-			fmt.Println(key.lexeme, ": ", str)
 		} else if num, ok := val.(int); ok {
 			(*m)[key.lexeme] = num
-			fmt.Println(key, ": ", num)
 		} else if arr, ok := val.([]interface{}); ok {
 			(*m)[key.lexeme] = arr
 		} else if boolean, ok := val.(bool); ok {
 			(*m)[key.lexeme] = boolean
 		} else if val == nil {
 			(*m)[key.lexeme] = val
+		} else if nestedMap, ok := val.(Map); ok {
+			(*m)[key.lexeme] = nestedMap
 		}
 
 		if peek(0).token == COMMA_TOKEN && peek(1).token == RIGHT_PAREN_TOKEN {
@@ -294,13 +298,4 @@ func main() {
 	fmt.Println("Parsing...")
 	parse(&m)
 	fmt.Println(m)
-	fmt.Println(m["key"])
-
-	// Since go is statically typed, we need to cast arrays to []interface{} to allow indexing.
-	// This is in line with how encodings/json handles JSON unmarshalling for when no struct is provided.
-	arr := (m["key"]).([]interface{})
-	arr2 := (m["key2"]).([]interface{})
-	fmt.Println(arr[0])
-	nestedArr := (arr2[1]).([]interface{})
-	fmt.Println(nestedArr[0])
 }
