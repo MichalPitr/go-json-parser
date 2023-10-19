@@ -7,14 +7,16 @@ import (
 )
 
 const (
-	LEFT_PAREN_TOKEN  int = 0
-	RIGHT_PAREN_TOKEN     = 1
-	COLON_TOKEN           = 2
-	STRING_TOKEN          = 3
-	COMMA_TOKEN           = 4
-	NUMBER_TOKEN          = 5
-	BOOL_TOKEN            = 6
-	NULL_TOKEN            = 7
+	LEFT_PAREN_TOKEN    int = 0
+	RIGHT_PAREN_TOKEN       = 1
+	COLON_TOKEN             = 2
+	STRING_TOKEN            = 3
+	COMMA_TOKEN             = 4
+	NUMBER_TOKEN            = 5
+	BOOL_TOKEN              = 6
+	NULL_TOKEN              = 7
+	LEFT_BRACKET_TOKEN      = 8
+	RIGHT_BRACKET_TOKEN     = 9
 )
 
 type Token struct {
@@ -56,6 +58,10 @@ func tokenize(source *string) {
 			parser.tokens = append(parser.tokens, Token{(*source)[start : end+1], LEFT_PAREN_TOKEN})
 		case '}':
 			parser.tokens = append(parser.tokens, Token{(*source)[start : end+1], RIGHT_PAREN_TOKEN})
+		case '[':
+			parser.tokens = append(parser.tokens, Token{(*source)[start : end+1], LEFT_BRACKET_TOKEN})
+		case ']':
+			parser.tokens = append(parser.tokens, Token{(*source)[start : end+1], RIGHT_BRACKET_TOKEN})
 		case ':':
 			parser.tokens = append(parser.tokens, Token{(*source)[start : end+1], COLON_TOKEN})
 		case ',':
@@ -124,6 +130,29 @@ func parseNumber(token Token) (interface{}, error) {
 	return nil, fmt.Errorf("'%s' is not an integer or float.\n", token.lexeme)
 }
 
+func parseArray() ([]interface{}, error) {
+	arr := []interface{}{}
+	consume(LEFT_BRACKET_TOKEN, "Expected '[' at the start of an array.")
+
+	token := peek(0)
+	for token.token != RIGHT_BRACKET_TOKEN {
+		val := parseValue()
+		arr = append(arr, val)
+		if peek(0).token != RIGHT_BRACKET_TOKEN && peek(0).token != COMMA_TOKEN {
+			return nil, fmt.Errorf("Expected a ',' to separate array elements.\n")
+		}
+
+		if peek(0).token == COMMA_TOKEN {
+			// skip over comma
+			position++
+		}
+		// Update token
+		token = peek(0)
+	}
+	consume(RIGHT_BRACKET_TOKEN, "Expected ']' to close an array.")
+	return arr, nil
+}
+
 // can be string, bool, int, float, null
 func parseValue() interface{} {
 	switch token := peek(0); token.token {
@@ -154,6 +183,14 @@ func parseValue() interface{} {
 	case NULL_TOKEN:
 		position++
 		return nil
+	case LEFT_BRACKET_TOKEN:
+		// Start of an array. Can hold multiple types.
+		arr, err := parseArray()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, err.Error())
+			os.Exit(1)
+		}
+		return arr
 	}
 	fmt.Fprintf(os.Stderr, "Unexpected token in parseValue: %d\n", peek(0).token)
 	os.Exit(1)
@@ -172,12 +209,18 @@ func parseJson(m *Map) {
 		val := parseValue()
 
 		if str, ok := val.(string); ok {
+			(*m)[key.lexeme] = str
 			fmt.Println(key.lexeme, ": ", str)
 		} else if num, ok := val.(int); ok {
+			(*m)[key.lexeme] = num
 			fmt.Println(key, ": ", num)
+		} else if arr, ok := val.([]interface{}); ok {
+			(*m)[key.lexeme] = arr
+		} else if boolean, ok := val.(bool); ok {
+			(*m)[key.lexeme] = boolean
+		} else if val == nil {
+			(*m)[key.lexeme] = val
 		}
-
-		(*m)[key.lexeme] = val
 
 		if peek(0).token == COMMA_TOKEN && peek(1).token == RIGHT_PAREN_TOKEN {
 			os.Stderr.WriteString("Trailing comma.\n")
@@ -211,6 +254,7 @@ func consume(token int, message string) bool {
 		return true
 	}
 	os.Stderr.WriteString(message + "\n")
+	os.Exit(1)
 	return false
 }
 
@@ -250,4 +294,13 @@ func main() {
 	fmt.Println("Parsing...")
 	parse(&m)
 	fmt.Println(m)
+	fmt.Println(m["key"])
+
+	// Since go is statically typed, we need to cast arrays to []interface{} to allow indexing.
+	// This is in line with how encodings/json handles JSON unmarshalling for when no struct is provided.
+	arr := (m["key"]).([]interface{})
+	arr2 := (m["key2"]).([]interface{})
+	fmt.Println(arr[0])
+	nestedArr := (arr2[1]).([]interface{})
+	fmt.Println(nestedArr[0])
 }
