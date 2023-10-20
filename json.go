@@ -70,6 +70,10 @@ func tokenize(source *string) {
 		case '"':
 			end++
 			for (*source)[end] != '"' {
+				// if escape \, skip 2 characters instead
+				if (*source)[end] == '\\' {
+					end++
+				}
 				end++
 			}
 			// string without quotes
