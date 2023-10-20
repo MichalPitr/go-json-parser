@@ -17,6 +17,7 @@ const (
 	NULL_TOKEN              = 7
 	LEFT_BRACKET_TOKEN      = 8
 	RIGHT_BRACKET_TOKEN     = 9
+	MINUS_TOKEN             = 10
 )
 
 type Token struct {
@@ -90,10 +91,27 @@ func tokenize(source *string) {
 						end++
 					}
 				}
+
+				// Handle scientific notation, 1e123
+				expUnsigned := end+1 < len(*source) && isDigit((*source)[end+1])
+				expSigned := (end+2 < len(*source) && ((*source)[end+1] == '+' || (*source)[end+1] == '-') && isDigit((*source)[end+2]))
+				if ((*source)[end] == 'e' || (*source)[end] == 'E') && (expUnsigned || expSigned) {
+					end++ // step over 'e'
+					if expSigned {
+						end++
+					}
+
+					for isDigit((*source)[end]) {
+						end++
+					}
+				}
+
 				number := (*source)[start:end]
 				// Decrement end so that we don't skip over the following character. Kinda ugly.
 				end--
 				parser.tokens = append(parser.tokens, Token{number, NUMBER_TOKEN})
+			} else if ch == '-' {
+				parser.tokens = append(parser.tokens, Token{"-", MINUS_TOKEN})
 			} else if ch == 't' && (*source)[end:end+4] == "true" {
 				parser.tokens = append(parser.tokens, Token{"true", BOOL_TOKEN})
 				end += 3
@@ -104,7 +122,8 @@ func tokenize(source *string) {
 				parser.tokens = append(parser.tokens, Token{"null", NULL_TOKEN})
 				end += 3
 			} else {
-				os.Stderr.WriteString("Found unexpected symbol.\n")
+				err := fmt.Errorf("Found unexpected symbol '%c'.\n", ch)
+				os.Stderr.WriteString(err.Error())
 				os.Exit(1)
 			}
 		}
@@ -117,13 +136,23 @@ func tokenize(source *string) {
 	}
 }
 
-func parseNumber(token Token) (interface{}, error) {
+func parseNumber(token Token, negative bool) (interface{}, error) {
+	if token.lexeme[0] == '0' && len(token.lexeme) > 1 && token.lexeme[1] != '.' {
+		return nil, fmt.Errorf("Leading 0 error in '%s'.\n", token.lexeme)
+	}
 	if i, err := strconv.Atoi(token.lexeme); err == nil {
+		if negative {
+			return -i, nil
+		}
 		return i, nil
 	}
 
 	// Try to parse as a float64
 	if f, err := strconv.ParseFloat(token.lexeme, 64); err == nil {
+		if negative {
+			return -f, nil
+		}
+		fmt.Printf("parsing float %f\n", f)
 		return f, nil
 	}
 
@@ -159,8 +188,18 @@ func parseValue() interface{} {
 	case STRING_TOKEN:
 		position++
 		return token.lexeme
+	case MINUS_TOKEN:
+		consume(MINUS_TOKEN, "Expected minus token.")
+		token = peek(0)
+		num, err := parseNumber(token, true)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, err.Error())
+			os.Exit(1)
+		}
+		position++
+		return num
 	case NUMBER_TOKEN:
-		num, err := parseNumber(token)
+		num, err := parseNumber(token, false)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, err.Error())
 			os.Exit(1)
@@ -216,6 +255,8 @@ func parseJson(m *Map) {
 			(*m)[key.lexeme] = str
 		} else if num, ok := val.(int); ok {
 			(*m)[key.lexeme] = num
+		} else if num, ok := val.(float64); ok {
+			(*m)[key.lexeme] = num
 		} else if arr, ok := val.([]interface{}); ok {
 			(*m)[key.lexeme] = arr
 		} else if boolean, ok := val.(bool); ok {
@@ -226,7 +267,7 @@ func parseJson(m *Map) {
 			(*m)[key.lexeme] = nestedMap
 		}
 
-		if peek(0).token == COMMA_TOKEN && peek(1).token == RIGHT_PAREN_TOKEN {
+		if peek(0).token == COMMA_TOKEN && position+1 < len(parser.tokens) && peek(1).token == RIGHT_PAREN_TOKEN {
 			os.Stderr.WriteString("Trailing comma.\n")
 			os.Exit(1)
 		}
@@ -297,5 +338,6 @@ func main() {
 	m := Map{}
 	fmt.Println("Parsing...")
 	parse(&m)
+
 	fmt.Println(m)
 }

@@ -1,4 +1,6 @@
 {
     "str": "some text",
-    "str2": "some more text"
+    "str2": "some more text",
+    "": "empty key is valid huh?",
+    "escape": "\""
 }
