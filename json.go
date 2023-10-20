@@ -341,7 +341,8 @@ func main() {
 	tokenize(&plainJson)
 	m := Map{}
 	fmt.Println("Parsing...")
-	parse(&m)
 
+	// Parsed json is stored in 'm'
+	parse(&m)
 	fmt.Println(m)
 }
